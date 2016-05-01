@@ -49,20 +49,26 @@
                     data: [randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor()],
                     fill: false,
                     borderDash: [5, 5],
-                }, {
+                }/*, {
                     hidden: true,
                     label: 'hidden dataset',
                     data: [randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor()],
                 }, {
                     label: "My Second dataset",
                     data: [randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor()],
-                }]
+                }*/]
             },
             options: {
                 responsive: true,
                 title:{
-                    display:true,
+                    display:false,
                     text:'Chart.js Line Chart'
+                },
+                legend: {
+                    display: false,
+                },
+                timeline: {
+                    display: true
                 },
                 tooltips: {
                     mode: 'label',
@@ -123,6 +129,19 @@
             dataset.pointBackgroundColor = randomColor(0.5);
             dataset.pointBorderWidth = 1;
         });
+
+        // Fill in more data
+        var i = 0;
+        while (i < 100) {
+            var month = MONTHS[config.data.labels.length % MONTHS.length];
+            config.data.labels.push(month);
+
+            $.each(config.data.datasets, function(i, dataset) {
+                dataset.data.push(randomScalingFactor());
+            });
+
+            i++;
+        }
 
         window.onload = function() {
             var ctx = document.getElementById("canvas").getContext("2d");
