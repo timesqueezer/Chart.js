@@ -1605,6 +1605,7 @@ require('./core/core.controller')(Chart);
 require('./core/core.datasetController')(Chart);
 require('./core/core.layoutService')(Chart);
 require('./core/core.legend')(Chart);
+require('./core/core.timeline')(Chart);
 require('./core/core.plugin.js')(Chart);
 require('./core/core.scale')(Chart);
 require('./core/core.scaleService')(Chart);
@@ -1639,7 +1640,7 @@ require('./charts/Chart.Scatter')(Chart);
 
 window.Chart = module.exports = Chart;
 
-},{"./charts/Chart.Bar":8,"./charts/Chart.Bubble":9,"./charts/Chart.Doughnut":10,"./charts/Chart.Line":11,"./charts/Chart.PolarArea":12,"./charts/Chart.Radar":13,"./charts/Chart.Scatter":14,"./controllers/controller.bar":15,"./controllers/controller.bubble":16,"./controllers/controller.doughnut":17,"./controllers/controller.line":18,"./controllers/controller.polarArea":19,"./controllers/controller.radar":20,"./core/core.animation":21,"./core/core.controller":22,"./core/core.datasetController":23,"./core/core.element":24,"./core/core.helpers":25,"./core/core.js":26,"./core/core.layoutService":27,"./core/core.legend":28,"./core/core.plugin.js":29,"./core/core.scale":30,"./core/core.scaleService":31,"./core/core.title":32,"./core/core.tooltip":33,"./elements/element.arc":34,"./elements/element.line":35,"./elements/element.point":36,"./elements/element.rectangle":37,"./scales/scale.category":38,"./scales/scale.linear":39,"./scales/scale.logarithmic":40,"./scales/scale.radialLinear":41,"./scales/scale.time":42}],8:[function(require,module,exports){
+},{"./charts/Chart.Bar":8,"./charts/Chart.Bubble":9,"./charts/Chart.Doughnut":10,"./charts/Chart.Line":11,"./charts/Chart.PolarArea":12,"./charts/Chart.Radar":13,"./charts/Chart.Scatter":14,"./controllers/controller.bar":15,"./controllers/controller.bubble":16,"./controllers/controller.doughnut":17,"./controllers/controller.line":18,"./controllers/controller.polarArea":19,"./controllers/controller.radar":20,"./core/core.animation":21,"./core/core.controller":22,"./core/core.datasetController":23,"./core/core.element":24,"./core/core.helpers":25,"./core/core.js":26,"./core/core.layoutService":27,"./core/core.legend":28,"./core/core.plugin.js":29,"./core/core.scale":30,"./core/core.scaleService":31,"./core/core.timeline":32,"./core/core.title":33,"./core/core.tooltip":34,"./elements/element.arc":35,"./elements/element.line":36,"./elements/element.point":37,"./elements/element.rectangle":38,"./scales/scale.category":39,"./scales/scale.linear":40,"./scales/scale.logarithmic":41,"./scales/scale.radialLinear":42,"./scales/scale.time":43}],8:[function(require,module,exports){
 "use strict";
 
 module.exports = function(Chart) {
@@ -3651,6 +3652,16 @@ module.exports = function(Chart) {
 
 				Chart.layoutService.addBox(this, this.legend);
 			}
+
+            if (this.options.timeline) {
+                this.timeline = new Chart.Timeline({
+                    ctx:this.chart.ctx,
+                    options: this.options.timeline,
+                    chart: this
+                });
+
+                Chart.layoutService.addBox(this, this.timeline);
+            }
 		},
 
 		updateLayout: function() {
@@ -3985,6 +3996,12 @@ module.exports = function(Chart) {
 					this.legend.handleEvent(e);
 				}
 			}
+
+            if (e.type === 'mouseup' || e.type === 'mousedown' || e.type === 'mousemove' || e.type === 'mouseout') {
+                if (this.timeline && this.timeline.handleEvent) {
+                    this.timeline.handleEvent(e);
+                }
+            }
 
 			// Remove styling for last active (even if it may still be active)
 			if (this.lastActive.length) {
@@ -5269,7 +5286,7 @@ module.exports = function() {
 			responsive: true,
 			responsiveAnimationDuration: 0,
 			maintainAspectRatio: true,
-			events: ["mousemove", "mouseout", "click", "touchstart", "touchmove"],
+			events: ["mousemove", "mouseout", "click", "touchstart", "touchmove", "mousedown", "mouseup"],
 			hover: {
 				onHover: null,
 				mode: 'single',
@@ -6764,6 +6781,268 @@ module.exports = function(Chart) {
 
 	var helpers = Chart.helpers;
 
+	Chart.defaults.global.timeline = {
+		display: true,
+		position: 'bottom',
+		fullWidth: true, // marks that this box should take the full width of the canvas (pushing down other boxes)
+
+		fontStyle: 'bold',
+		padding: 5,
+
+        handleWidth: 5,
+        handleColor: 'rgba(0, 0, 0, 0.5)'
+	};
+
+	Chart.Timeline = Chart.Element.extend({
+
+		initialize: function(config) {
+			helpers.extend(this, config);
+			this.options = helpers.configMerge(Chart.defaults.global.timeline, config.options);
+
+			// Contains left and right handle
+			this.handles = {};
+		},
+
+		// These methods are ordered by lifecyle. Utilities then follow.
+
+		beforeUpdate: helpers.noop,
+		update: function(maxWidth, maxHeight, margins) {
+
+			// Update Lifecycle - Probably don't want to ever extend or overwrite this function ;)
+			this.beforeUpdate();
+
+			// Absorb the master measurements
+			this.maxWidth = maxWidth;
+			this.maxHeight = maxHeight;
+			this.margins = margins;
+
+			// Dimensions
+			this.beforeSetDimensions();
+			this.setDimensions();
+			this.afterSetDimensions();
+			
+			// Fit
+			this.beforeFit();
+			this.fit();
+			this.afterFit();
+
+            // Handles
+            this.beforeBuildHandles();
+            this.buildHandles();
+            this.afterBuildHandles();
+
+			//
+			this.afterUpdate();
+
+			return this.minSize;
+
+		},
+		afterUpdate: helpers.noop,
+
+		//
+
+		beforeSetDimensions: helpers.noop,
+		setDimensions: function() {
+			// Set the unconstrained dimension before label rotation
+			if (this.isHorizontal()) {
+				// Reset position before calculating rotation
+				this.width = this.maxWidth;
+				this.left = 0;
+				this.right = this.width;
+			} else {
+				this.height = this.maxHeight;
+
+				// Reset position before calculating rotation
+				this.top = 0;
+				this.bottom = this.height;
+			}
+
+			// Reset padding
+			this.paddingLeft = 0;
+			this.paddingTop = 0;
+			this.paddingRight = 0;
+			this.paddingBottom = 0;
+
+			// Reset minSize
+			this.minSize = {
+				width: 0,
+				height: 0
+			};
+		},
+		afterSetDimensions: helpers.noop,
+
+        //
+
+        beforeFit: helpers.noop,
+        fit: function() {
+
+            var ctx = this.ctx;
+            var fontSize = helpers.getValueOrDefault(this.options.fontSize, Chart.defaults.global.defaultFontSize);
+            var fontStyle = helpers.getValueOrDefault(this.options.fontStyle, Chart.defaults.global.defaultFontStyle);
+            var fontFamily = helpers.getValueOrDefault(this.options.fontFamily, Chart.defaults.global.defaultFontFamily);
+            var titleFont = helpers.fontString(fontSize, fontStyle, fontFamily);
+
+            // Width
+            if (this.isHorizontal()) {
+                this.minSize.width = this.maxWidth; // fill all the width
+                this.minSize.height = this.maxHeight / 6; // fill all the height
+            }
+            // Increase sizes here
+            /*if (this.isHorizontal()) {
+
+                // Title
+                if (this.options.display) {
+                    this.minSize.height += fontSize + 50 + (this.options.padding * 2);
+                }
+            } else {
+                if (this.options.display) {
+                    this.minSize.width += fontSize + (this.options.padding * 2);
+                }
+            }*/
+
+            this.width = this.minSize.width;
+            this.height = this.minSize.height;
+
+        },
+        afterFit: helpers.noop,
+
+		//
+
+		beforeBuildHandles: helpers.noop,
+		buildHandles: function() {
+            this.innerBox = {
+                x: this.left + this.options.padding,
+                y: this.top + this.options.padding,
+                w: this.width - (this.options.padding * 2),
+                h: this.height - (this.options.padding * 2)
+            };
+            helpers.extend(this.handles, {
+                left: {
+                    x: this.innerBox.x,
+                    y: this.innerBox.y,
+                    w: this.options.handleWidth,
+                    h: this.innerBox.h,
+                    clicked: false
+                },
+                right: {
+                    x: this.innerBox.w - this.options.handleWidth,
+                    y: this.innerBox.y,
+                    w: this.options.handleWidth,
+                    h: this.innerBox.h,
+                    clicked: false
+                }
+            });
+        },
+		afterBuildHandles: helpers.noop,
+
+		// Shared Methods
+		isHorizontal: function() {
+			return this.options.position === "top" || this.options.position === "bottom";
+		},
+
+        clear: function() {
+            this.ctx.clearRect(this.left, this.top, this.width, this.height);
+        },
+
+		// Actualy draw the title block on the canvas
+		draw: function() {
+			if (this.options.display) {
+				var ctx = this.ctx;
+                this.clear();
+
+                var handleColor = helpers.getValueOrDefault(this.options.handleColor, Chart.defaults.global.defaultFontColor);
+
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = handleColor;
+                ctx.fillStyle = '#7af';
+
+                var h = this.handles;
+
+                // Left
+                ctx.strokeRect(h.left.x, h.left.y, h.left.w, h.left.h);
+                ctx.fillRect(h.left.x, h.left.y, h.left.w, h.left.h);
+                // Right
+                ctx.strokeRect(h.right.x, h.right.y, h.right.w, h.right.h);
+                ctx.fillRect(h.right.x, h.right.y, h.right.w, h.right.h);
+
+			}
+		},
+
+        handleEvent: function(e) {
+            var position = helpers.getRelativePosition(e, this.chart.chart);
+            var h = this.handles;
+
+            if (e.type == 'mousedown' || e.type == 'mouseup') {
+                // Check if position lies inside one of the handles
+                if (position.x >= h.left.x && position.x <= (h.left.x + h.left.w) &&
+                    position.y >= h.left.y && position.y <= (h.left.y + h.left.h) ) {
+
+                    if (e.type === 'mousemove') {
+                        // Set cursor on hover
+                        this.ctx.canvas.style.cursor = 'pointer';
+
+                        // Update position if inside inner box and left of right handle
+                        if (h.left.clicked) {
+                            var new_position = h.left.x + e.movementX;
+                            if (new_position >= this.innerBox.x && new_position < (h.right.x - h.left.w)) {
+                                console.log('LEFT HANDLE MOUSEMOVE');
+                                h.left.x = new_position;
+                                this.draw();
+                            }
+                        }
+                    }
+
+                    if (!h.left.clicked && e.type == 'mousedown') {
+                        console.log('LEFT HANDLE MOUSEDOWN');
+                        h.left.clicked = true;
+                    } else if (h.left.clicked && e.type == 'mouseup') {
+                        console.log('LEFT HANDLE MOUSEUP');
+                        h.left.clicked = false;
+                    }
+                } else if (position.x >= h.right.x && position.x <= (h.right.x + h.right.w) &&
+                           position.y >= h.right.y && position.y <= (h.right.y + h.right.h) ) {
+
+                    // Set cursor on hover
+                    if (e.type === 'mousemove') {
+                        this.ctx.canvas.style.cursor = 'pointer';
+
+                        if (h.right.clicked) {
+                            var new_position = h.right.x + e.movementX;
+                            if (new_position <= (this.innerBox.x + this.innerBox.w - h.right.w) && new_position > (h.left.x + h.left.w)) {
+                                console.log('RIGHT HANDLE MOUSEMOVE');
+                                h.right.x = new_position;
+                                this.draw();
+                            }
+                        }
+                    }
+
+                    if (!h.right.clicked && e.type == 'mousedown') {
+                        console.log('RIGHT HANDLE MOUSEDOWN');
+                        h.right.clicked = true;
+                    } else if (h.right.clicked && e.type == 'mouseup') {
+                        console.log('RIGHT HANDLE MOUSEUP');
+                        h.right.clicked = false;
+                    }
+                } else {
+                    // Unset cursor on hover
+                    if (e.type === 'mousemove') {
+                        this.ctx.canvas.style.cursor = 'default';
+                    }
+                }
+            } else if (e.type === 'mouseout') {
+                h.left.clicked = false;
+                h.right.clicked = false;
+            }
+        }
+	});
+};
+},{}],33:[function(require,module,exports){
+"use strict";
+
+module.exports = function(Chart) {
+
+	var helpers = Chart.helpers;
+
 	Chart.defaults.global.title = {
 		display: false,
 		position: 'top',
@@ -6951,7 +7230,7 @@ module.exports = function(Chart) {
 		}
 	});
 };
-},{}],33:[function(require,module,exports){
+},{}],34:[function(require,module,exports){
 "use strict";
 
 module.exports = function(Chart) {
@@ -7569,7 +7848,7 @@ module.exports = function(Chart) {
 	});
 };
 
-},{}],34:[function(require,module,exports){
+},{}],35:[function(require,module,exports){
 "use strict";
 
 module.exports = function(Chart, moment) {
@@ -7661,7 +7940,7 @@ module.exports = function(Chart, moment) {
   });
 };
 
-},{}],35:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 "use strict";
 
 module.exports = function(Chart) {
@@ -7823,7 +8102,7 @@ module.exports = function(Chart) {
 		}
 	});
 };
-},{}],36:[function(require,module,exports){
+},{}],37:[function(require,module,exports){
 "use strict";
 
 module.exports = function(Chart) {
@@ -7977,7 +8256,7 @@ module.exports = function(Chart) {
 		}
 	});
 };
-},{}],37:[function(require,module,exports){
+},{}],38:[function(require,module,exports){
 "use strict";
 
 module.exports = function(Chart) {
@@ -8084,7 +8363,7 @@ module.exports = function(Chart) {
 	});
 
 };
-},{}],38:[function(require,module,exports){
+},{}],39:[function(require,module,exports){
 "use strict";
 
 module.exports = function(Chart) {
@@ -8183,7 +8462,7 @@ module.exports = function(Chart) {
 	Chart.scaleService.registerScaleType("category", DatasetScale, defaultConfig);
 
 };
-},{}],39:[function(require,module,exports){
+},{}],40:[function(require,module,exports){
 "use strict";
 
 module.exports = function(Chart) {
@@ -8457,7 +8736,7 @@ module.exports = function(Chart) {
 	Chart.scaleService.registerScaleType("linear", LinearScale, defaultConfig);
 
 };
-},{}],40:[function(require,module,exports){
+},{}],41:[function(require,module,exports){
 "use strict";
 
 module.exports = function(Chart) {
@@ -8670,7 +8949,7 @@ module.exports = function(Chart) {
 	Chart.scaleService.registerScaleType("logarithmic", LogarithmicScale, defaultConfig);
 
 };
-},{}],41:[function(require,module,exports){
+},{}],42:[function(require,module,exports){
 "use strict";
 
 module.exports = function(Chart) {
@@ -9112,7 +9391,7 @@ module.exports = function(Chart) {
 	Chart.scaleService.registerScaleType("radialLinear", LinearRadialScale, defaultConfig);
 
 };
-},{}],42:[function(require,module,exports){
+},{}],43:[function(require,module,exports){
 /*global window: false */
 "use strict";
 

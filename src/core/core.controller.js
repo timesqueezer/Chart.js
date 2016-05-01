@@ -197,6 +197,16 @@ module.exports = function(Chart) {
 
 				Chart.layoutService.addBox(this, this.legend);
 			}
+
+            if (this.options.timeline) {
+                this.timeline = new Chart.Timeline({
+                    ctx:this.chart.ctx,
+                    options: this.options.timeline,
+                    chart: this
+                });
+
+                Chart.layoutService.addBox(this, this.timeline);
+            }
 		},
 
 		updateLayout: function() {
@@ -531,6 +541,12 @@ module.exports = function(Chart) {
 					this.legend.handleEvent(e);
 				}
 			}
+
+            if (e.type === 'mouseup' || e.type === 'mousedown' || e.type === 'mousemove' || e.type === 'mouseout') {
+                if (this.timeline && this.timeline.handleEvent) {
+                    this.timeline.handleEvent(e);
+                }
+            }
 
 			// Remove styling for last active (even if it may still be active)
 			if (this.lastActive.length) {

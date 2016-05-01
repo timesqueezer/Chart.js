@@ -64,7 +64,7 @@ module.exports = function() {
 			responsive: true,
 			responsiveAnimationDuration: 0,
 			maintainAspectRatio: true,
-			events: ["mousemove", "mouseout", "click", "touchstart", "touchmove"],
+			events: ["mousemove", "mouseout", "click", "touchstart", "touchmove", "mousedown", "mouseup"],
 			hover: {
 				onHover: null,
 				mode: 'single',
