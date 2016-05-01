@@ -6648,8 +6648,8 @@ module.exports = function(Chart) {
 		update: function update(reset) {
 			var meta = this.getMeta();
 			var line = meta.dataset;
-			var points = meta.data;
-
+            var points = meta.data;
+		
 			var yScale = this.getScaleForId(meta.yAxisID);
 			var xScale = this.getScaleForId(meta.xAxisID);
 			var scaleBase;
@@ -10822,13 +10822,13 @@ module.exports = function(Chart) {
 
 	Chart.defaults.global.timeline = {
 		display: true,
-		position: 'bottom',
+		position: 'top',
 		fullWidth: true, // marks that this box should take the full width of the canvas (pushing down other boxes)
 
 		fontStyle: 'bold',
 		padding: 5,
 
-        handleWidth: 5,
+        handleWidth: 8,
         handleColor: 'rgba(0, 0, 0, 0.5)'
 	};
 
@@ -10840,6 +10840,16 @@ module.exports = function(Chart) {
 
 			// Contains left and right handle
 			this.handles = {};
+            this.lLimit = 0;
+            this.rLimit = 1;
+
+            // Copy labels and data into shadow lists
+            this.shadowLabels = this.chart.data.labels.slice();
+            this.shadowData = [];
+            helpers.each(this.chart.data.datasets, function(dataset, datasetIndex) {
+                this.shadowData[datasetIndex] = dataset.data.slice();
+            }, this);
+
 		},
 
 		// These methods are ordered by lifecyle. Utilities then follow.
@@ -10900,7 +10910,7 @@ module.exports = function(Chart) {
 			this.paddingLeft = 0;
 			this.paddingTop = 0;
 			this.paddingRight = 0;
-			this.paddingBottom = 0;
+			this.paddingBottom = 20;
 
 			// Reset minSize
 			this.minSize = {
@@ -10957,20 +10967,21 @@ module.exports = function(Chart) {
             };
             helpers.extend(this.handles, {
                 left: {
-                    x: this.innerBox.x,
+                    x: this.innerBox.x + (this.lLimit * this.innerBox.w), // Calculate from lLimit when updating
                     y: this.innerBox.y,
                     w: this.options.handleWidth,
                     h: this.innerBox.h,
                     clicked: false
                 },
                 right: {
-                    x: this.innerBox.w - this.options.handleWidth,
+                    x: (this.innerBox.w * this.rLimit) - this.options.handleWidth,
                     y: this.innerBox.y,
                     w: this.options.handleWidth,
                     h: this.innerBox.h,
                     clicked: false
                 }
             });
+            // Handle resizing here
         },
 		afterBuildHandles: helpers.noop,
 
@@ -11007,60 +11018,56 @@ module.exports = function(Chart) {
 			}
 		},
 
+        restoreData: function() {
+            console.log('SHADOWDATA: ', this.shadowData);
+            var lLabelIndex = Math.floor(this.shadowLabels.length * this.lLimit);
+            var rLabelIndex = Math.ceil(this.shadowLabels.length * this.rLimit);
+
+            this.chart.data.labels = this.shadowLabels.slice().splice(lLabelIndex, rLabelIndex-lLabelIndex);
+
+            helpers.each(this.chart.data.datasets, function(dataset, datasetIndex) {
+                var lIndex = Math.floor(this.shadowData[datasetIndex].length * this.lLimit);
+                var rIndex = Math.ceil(this.shadowData[datasetIndex].length * this.rLimit);
+
+                this.chart.data.datasets[datasetIndex].data = this.shadowData[datasetIndex].slice().splice(lIndex, rIndex-lIndex);
+            }, this);
+            console.log('ACTUAL DATASETS: ', this.chart.data.datasets);
+
+            this.chart.update();
+        },
+
         handleEvent: function(e) {
             var position = helpers.getRelativePosition(e, this.chart.chart);
             var h = this.handles;
 
-            if (e.type == 'mousedown' || e.type == 'mouseup') {
-                // Check if position lies inside one of the handles
+            // Unset clicked in any case
+            if (e.type === 'mouseout' || e.type === 'mouseup') {
+                h.left.clicked = false;
+                h.right.clicked = false;
+                this.restoreData();
+            } else {
+                // Check if position lies inside one of the handles, set hover and/or clicked resp.
                 if (position.x >= h.left.x && position.x <= (h.left.x + h.left.w) &&
                     position.y >= h.left.y && position.y <= (h.left.y + h.left.h) ) {
 
+                    // Hover
                     if (e.type === 'mousemove') {
-                        // Set cursor on hover
                         this.ctx.canvas.style.cursor = 'pointer';
-
-                        // Update position if inside inner box and left of right handle
-                        if (h.left.clicked) {
-                            var new_position = h.left.x + e.movementX;
-                            if (new_position >= this.innerBox.x && new_position < (h.right.x - h.left.w)) {
-                                console.log('LEFT HANDLE MOUSEMOVE');
-                                h.left.x = new_position;
-                                this.draw();
-                            }
-                        }
-                    }
-
-                    if (!h.left.clicked && e.type == 'mousedown') {
+                    // Mousedown -> clicked
+                    } else if (!h.left.clicked && e.type == 'mousedown') {
                         console.log('LEFT HANDLE MOUSEDOWN');
                         h.left.clicked = true;
-                    } else if (h.left.clicked && e.type == 'mouseup') {
-                        console.log('LEFT HANDLE MOUSEUP');
-                        h.left.clicked = false;
                     }
                 } else if (position.x >= h.right.x && position.x <= (h.right.x + h.right.w) &&
                            position.y >= h.right.y && position.y <= (h.right.y + h.right.h) ) {
 
-                    // Set cursor on hover
+                    // Hover
                     if (e.type === 'mousemove') {
                         this.ctx.canvas.style.cursor = 'pointer';
-
-                        if (h.right.clicked) {
-                            var new_position = h.right.x + e.movementX;
-                            if (new_position <= (this.innerBox.x + this.innerBox.w - h.right.w) && new_position > (h.left.x + h.left.w)) {
-                                console.log('RIGHT HANDLE MOUSEMOVE');
-                                h.right.x = new_position;
-                                this.draw();
-                            }
-                        }
-                    }
-
-                    if (!h.right.clicked && e.type == 'mousedown') {
+                    // Mousedown -> clicked
+                    } else if (!h.right.clicked && e.type == 'mousedown') {
                         console.log('RIGHT HANDLE MOUSEDOWN');
                         h.right.clicked = true;
-                    } else if (h.right.clicked && e.type == 'mouseup') {
-                        console.log('RIGHT HANDLE MOUSEUP');
-                        h.right.clicked = false;
                     }
                 } else {
                     // Unset cursor on hover
@@ -11068,9 +11075,27 @@ module.exports = function(Chart) {
                         this.ctx.canvas.style.cursor = 'default';
                     }
                 }
-            } else if (e.type === 'mouseout') {
-                h.left.clicked = false;
-                h.right.clicked = false;
+
+                // Update position if inside inner box and left of right handle
+                if (h.left.clicked) {
+                    var new_position = h.left.x + e.movementX;
+                    if (new_position >= this.innerBox.x && new_position < (h.right.x - h.left.w)) {
+                        //console.log('LEFT HANDLE MOUSEMOVE');
+                        h.left.x = new_position;
+                        this.lLimit = (h.left.x - this.innerBox.x) / this.innerBox.w;
+                        this.draw();
+                        //this.chart.update();
+                    }
+                } else if (h.right.clicked) {
+                    var new_position = h.right.x + e.movementX;
+                    if (new_position <= (this.innerBox.x + this.innerBox.w - h.right.w) && new_position > (h.left.x + h.left.w)) {
+                        h.right.x = new_position;
+                        this.rLimit = (h.right.x + this.options.handleWidth) / this.innerBox.w;
+                        //console.log('RIGHT HANDLE MOUSEMOVE', this.rLimit);
+                        this.draw();
+                        //this.chart.update();
+                    }
+                }
             }
         }
 	});
