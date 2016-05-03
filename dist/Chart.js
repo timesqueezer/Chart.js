@@ -6790,7 +6790,8 @@ module.exports = function(Chart) {
 		padding: 5,
 
         handleWidth: 8,
-        handleColor: 'rgba(0, 0, 0, 0.5)'
+        handleColor: 'rgba(0, 0, 0, 0.5)',
+        handleBackgroundColor: 'rgba(0, 0, 0, 0.1)'
 	};
 
 	Chart.Timeline = Chart.Element.extend({
@@ -6963,10 +6964,11 @@ module.exports = function(Chart) {
                 this.clear();
 
                 var handleColor = helpers.getValueOrDefault(this.options.handleColor, Chart.defaults.global.defaultFontColor);
+                var handleBackgroundColor = helpers.getValueOrDefault(this.options.handleBackgroundColor, Chart.defaults.global.defaultColor);
 
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 1;
                 ctx.strokeStyle = handleColor;
-                ctx.fillStyle = '#7af';
+                ctx.fillStyle = handleBackgroundColor;
 
                 var h = this.handles;
 
@@ -6981,19 +6983,14 @@ module.exports = function(Chart) {
 		},
 
         updateData: function() {
-            //console.log('SHADOWDATA: ', this.shadowData);
-            var lLabelIndex = Math.floor(this.shadowLabels.length * this.lLimit);
-            var rLabelIndex = Math.ceil(this.shadowLabels.length * this.rLimit);
+            var lIndex = Math.floor(this.shadowLabels.length * this.lLimit);
+            var rIndex = Math.ceil(this.shadowLabels.length * this.rLimit);
 
-            this.chart.data.labels = this.shadowLabels.slice().splice(lLabelIndex, rLabelIndex-lLabelIndex);
+            this.chart.data.labels = this.shadowLabels.slice().splice(lIndex, rIndex-lIndex);
 
             helpers.each(this.chart.data.datasets, function(dataset, datasetIndex) {
-                var lIndex = Math.floor(this.shadowData[datasetIndex].length * this.lLimit);
-                var rIndex = Math.ceil(this.shadowData[datasetIndex].length * this.rLimit);
-
                 this.chart.data.datasets[datasetIndex].data = this.shadowData[datasetIndex].slice().splice(lIndex, rIndex-lIndex);
             }, this);
-            //console.log('ACTUAL DATASETS: ', this.chart.data.datasets);
 
             this.chart.update(500);
         },
