@@ -10974,15 +10974,15 @@ module.exports = function(Chart) {
             };
 
             // Update positions
-            this.handles.left.x = this.innerBox.x + (this.lLimit * this.innerBox.w) // Calculate from lLimit when updating
-            this.handles.left.y = this.innerBox.y
-            this.handles.left.w = this.options.handleWidth
-            this.handles.left.h = this.innerBox.h
+            this.handles.left.x = this.innerBox.x + (this.lLimit * this.innerBox.w); // Calculate from lLimit when updating
+            this.handles.left.y = this.innerBox.y;
+            this.handles.left.w = this.options.handleWidth;
+            this.handles.left.h = this.innerBox.h;
 
-            this.handles.right.x = (this.innerBox.w * this.rLimit) - this.options.handleWidth
-            this.handles.right.y = this.innerBox.y
-            this.handles.right.w = this.options.handleWidth
-            this.handles.right.h = this.innerBox.h
+            this.handles.right.x = (this.innerBox.w * this.rLimit) - this.options.handleWidth;
+            this.handles.right.y = this.innerBox.y;
+            this.handles.right.w = this.options.handleWidth;
+            this.handles.right.h = this.innerBox.h;
 
         },
 		afterBuildHandles: helpers.noop,
@@ -11031,6 +11031,8 @@ module.exports = function(Chart) {
                 this.chart.data.datasets[datasetIndex].data = this.shadowData[datasetIndex].slice().splice(lIndex, rIndex-lIndex);
             }, this);
 
+            console.log(this.shadowData[0].length);
+
             this.chart.update(500);
         },
 
@@ -11077,16 +11079,16 @@ module.exports = function(Chart) {
 
                 // Update position if inside inner box and left of right handle
                 if (h.left.clicked) {
-                    var new_position = h.left.x + e.movementX;
-                    if (new_position >= this.innerBox.x && new_position < (h.right.x - h.left.w)) {
-                        h.left.x = new_position;
+                    var newLeftPosition = h.left.x + e.movementX;
+                    if (newLeftPosition >= this.innerBox.x && newLeftPosition < (h.right.x - h.left.w)) {
+                        h.left.x = newLeftPosition;
                         this.lLimit = (h.left.x - this.innerBox.x) / this.innerBox.w;
                         this.updateData();
                     }
                 } else if (h.right.clicked) {
-                    var new_position = h.right.x + e.movementX;
-                    if (new_position <= (this.innerBox.x + this.innerBox.w - h.right.w) && new_position > (h.left.x + h.left.w)) {
-                        h.right.x = new_position;
+                    var newRightPosition = h.right.x + e.movementX;
+                    if (newRightPosition <= (this.innerBox.x + this.innerBox.w - h.right.w) && newRightPosition > (h.left.x + h.left.w)) {
+                        h.right.x = newRightPosition;
                         this.rLimit = (h.right.x + this.options.handleWidth) / this.innerBox.w;
                         this.updateData();
                     }
