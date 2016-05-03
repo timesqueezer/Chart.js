@@ -62,7 +62,7 @@ module.exports = function(Chart) {
 			var meta = this.getMeta();
 			var line = meta.dataset;
             var points = meta.data;
-		
+
 			var yScale = this.getScaleForId(meta.yAxisID);
 			var xScale = this.getScaleForId(meta.xAxisID);
 			var scaleBase;
